@@ -1,9 +1,26 @@
 const canvas = document.getElementById("dust_canvas");
 const ctx = canvas.getContext('2d');
+let sim_settings = {
+    width: 200,
+    height: 200,
+    zoom: 3,
+    friction: 0.98
+}
+
 let cells = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
 let backrooms = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
 let particle_chooser = document.getElementById("particle_chooser");
 let brush_size_slider = document.getElementById("brush_size");
+let sim_state = {
+    framecount: 0,
+    mouse: {
+        x: 0,
+        y: 0,
+        clicking: false
+    },
+    brush_size: brush_size_slider,
+    current_place_type: "AIR"
+}
 
 function fatalError(msg) {
     alert(`A fatal error has occurred, and Dust is not able to continue.\n\nError details: ${msg}`);
@@ -15,23 +32,6 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-let sim_settings = {
-    width: 200,
-    height: 200,
-    zoom: 3,
-    friction: 0.98
-}
-
-let sim_state = {
-    framecount: 0,
-    mouse: {
-        x: 0,
-        y: 0,
-        clicking: false
-    },
-    brush_size: brush_size_slider,
-    current_place_type: "AIR"
-}
 
 let mat_attrs = {
     "AIR": {
