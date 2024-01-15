@@ -18,7 +18,7 @@ let sim_state = {
         y: 0,
         clicking: false
     },
-    brush_size: brush_size_slider,
+    brush_size: brush_size_slider.value,
     current_place_type: "AIR"
 }
 
