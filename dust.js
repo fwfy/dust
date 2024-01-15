@@ -288,7 +288,7 @@ canvas.addEventListener("mousedown", _ => {
     sim_state.mouse.clicking = true;
 });
 
-canvas.addEventListener("mouseup", _ => {
+document.addEventListener("mouseup", _ => {
     sim_state.mouse.clicking = false;
 });
 
