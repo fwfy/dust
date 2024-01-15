@@ -1,5 +1,9 @@
 const canvas = document.getElementById("dust_canvas");
 const ctx = canvas.getContext('2d');
+let cells = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
+let backrooms = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
+let particle_chooser = document.getElementById("particle_chooser");
+let brush_size_slider = document.getElementById("brush_size");
 
 function fatalError(msg) {
     alert(`A fatal error has occurred, and Dust is not able to continue.\n\nError details: ${msg}`);
@@ -25,7 +29,7 @@ let sim_state = {
         y: 0,
         clicking: false
     },
-    brush_size: document.getElementById("brush_size").value,
+    brush_size: brush_size_slider,
     current_place_type: "AIR"
 }
 
@@ -105,10 +109,6 @@ let mat_attrs = {
     }
 }
 
-let cells = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
-let backrooms = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
-let particle_chooser = document.getElementById("particle_chooser");
-let brush_size_slider = document.getElementById("brush_size");
 
 Object.keys(mat_attrs).forEach(e => {
     let opt = document.createElement("option");
