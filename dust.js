@@ -185,10 +185,6 @@ function forAllCells(callback) {
     }
 }
 
-forAllCells((_, x, y) => {
-    new Cell("AIR",20,x,y,0,0,0);
-});
-
 function blank() {
     ctx.fillStyle = "rgba(0,0,0,0.25)";
     ctx.fillRect(0,0,800,600);
@@ -243,7 +239,7 @@ function drawAll() {
     forAllCells(draw);
 }
 
-function loop(once=false) {
+function loop() {
     let startTime = Date.now();
     sim_state.framecount++;
     blank();
@@ -264,22 +260,16 @@ function loop(once=false) {
     }
     drawAll();
     let drawEnd = Date.now();
-    ctx.fillStyle = "#00FFFF";
     if(sim_state.framecount % 60 == 0) console.log(`[loop] took ${Date.now()-startTime}ms, spending ${physEnd-physStart}ms on physics, and ${drawEnd-drawStart}ms on rendering.`);
     if(sim_state.running) setTimeout(loop,15)
 }
 
 canvas.addEventListener("mousemove", e => {
-    // ChatGPT wrote most of this code, which is why it's kinda shit.
-    // What makes that fact worse is that I gave it an entire copy of this game's source code,
-    // tried dozens of times to get it to just Fucking Work, and it just could not do it.
-    // the offending lines of code are ...
     let rect = canvas.getBoundingClientRect();
     let cx = e.clientX - rect.left;
     let cy = e.clientY - rect.top;
-    let simX = cx / sim_settings.zoom;  // this one
-    let simY = cy / sim_settings.zoom;  // and this one. Notice how simple they are? I wrote those. ChatGPT couldn't figure it out.
-                                        // Whoever says that AI is gonna take over the world is delusional.
+    let simX = cx / sim_settings.zoom;
+    let simY = cy / sim_settings.zoom;
     sim_state.mouse.x = Math.max(0, Math.min(sim_settings.width - 1, Math.floor(simX)));
     sim_state.mouse.y = Math.max(0, Math.min(sim_settings.height - 1, Math.floor(simY)));
 });
@@ -299,6 +289,10 @@ particle_chooser.addEventListener("change", e => {
 
 brush_size_slider.addEventListener("change", e => {
     sim_state.brush_size = Number(brush_size_slider.value);
+});
+
+forAllCells((_, x, y) => {
+    new Cell("AIR",20,x,y,0,0,0);
 });
 
 sim_state.running = true;
