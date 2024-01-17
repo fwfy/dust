@@ -5,3 +5,5 @@ As the title states, this project is a 2D particle physics simulator, following 
 As of right now, there is not currently a modding API to add custom elements, but that feature is quite high on my priority list.
 
 Feel free to contribute! I'm not used to using GitHub (or any version control, really), so I might be a bit clunky with it at first, but I hope that this project will also help to give me some more experience on how to properly utilize it.
+
+### Don't want to clone the repo? You can access the latest GitHub version of the game [here](https://fwfy.club/dust).
