@@ -5,7 +5,7 @@ const urlParams = new URLSearchParams(window.location.search);
 let sim_settings = {
     width: Number(urlParams.get('size')) || 200,
     height: Number(urlParams.get('size')) || 200,
-    zoom: 600/Number(urlParams.get('size')) || 3,
+    zoom: urlParams.has('size') ? 600/Number(urlParams.get('size')) : 3,
     friction: 0.98
 }
 
