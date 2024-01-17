@@ -1,9 +1,11 @@
 const canvas = document.getElementById("dust_canvas");
 const ctx = canvas.getContext('2d');
+const urlParams = new URLSearchParams(window.location.search);
+
 let sim_settings = {
-    width: 200,
-    height: 200,
-    zoom: 3,
+    width: Number(urlParams.get('size')) || 200,
+    height: Number(urlParams.get('size')) || 200,
+    zoom: 600/Number(urlParams.get('size')) || 3,
     friction: 0.98
 }
 
@@ -19,7 +21,8 @@ let sim_state = {
         clicking: false
     },
     brush_size: brush_size_slider.value,
-    current_place_type: "AIR"
+    current_place_type: "AIR",
+    last_perf_printout: 0
 }
 
 function fatalError(msg) {
@@ -39,7 +42,15 @@ let mat_attrs = {
         draw: false,
         color: `255,0,0,255`,
         solid: false,
-        default_physics: false
+        default_physics: false,
+        empty: true
+    },
+    "DUST": {
+        gravity: true,
+        draw: true,
+        color: `246,161,146,255`,
+        solid: true,
+        default_physics: true
     },
     "STUFF": {
         gravity: true,
@@ -146,8 +157,8 @@ class Cell {
     updatePosition(ox,oy,nx,ny) {
         try {
             if(ox == nx && oy == ny) return;
-            if(cells[nx][ny].material_attributes.solid || cells[nx][ny].type == this.type) return (this.xv = this.yv = 0);
-            if(!cells[nx][ny].material_attributes.solid) backrooms[nx][ny] = cells[nx][ny];
+            if(cells[nx][ny].material_attributes.solid) return (this.xv = this.yv = 0);
+            /* if(cells[nx][ny].material_attributes.solid === false && !backrooms[nx][ny]) backrooms[nx][ny] = cells[nx][ny]; */
             cells[ox][oy] = null;
             new Cell("AIR",20,ox,oy,0,0,0);
             cells[nx][ny] = this;
@@ -158,14 +169,16 @@ class Cell {
     set x(v) {
         v = Math.round(v);
         if(this._x == v) return;
-        if(v < 0 || v > sim_settings.width-1) return;
+        if(v < 0) v = 0;
+        if(v > sim_settings.width-1) v = sim_settings.width - 1;
         this.updatePosition(this._x,this._y,v,this._y);
         this._x = v;
     }
     set y(v) {
         v = Math.round(v);
         if(this._y == v) return;
-        if(v < 0 || v > sim_settings.height-1) return;
+        if(v < 0) v = 0;
+        if(v > sim_settings.height-1) v = sim_settings.height - 1;
         this.updatePosition(this._x,this._y,this._x,v);
         this._y = v;
     }
@@ -207,9 +220,22 @@ function physics(cell,x,y) {
         if(cell.x > sim_settings.width) cell.x = sim_settings.width-2;
         if(cell.y > sim_settings.height) cell.y = sim_settings.height-2;
         cell.temp -= cell.temp/1000;
-        // cell.falling = (!cells[cell.x][cell.y+1]?.solid && cell.y < sim_settings.height);
+        cell.falling = (cells?.[x]?.[y+1]?.material_attributes.empty);
         if(cell.material_attributes.gravity) {
-            cell.yv += 0.05;
+            if(cell.falling) {
+                if(cells?.[x]?.[y+1]?.material_attributes.empty) {
+                    cell.yv += 0.5;
+                } else {
+                    let fallDir = cell.age % 2 == 0;
+                    if(cells?.[x-1]?.[y+1]?.material_attributes.empty && fallDir) {
+                        cell.xv += -1;
+                        cell.yv += 0.5;
+                    } else if (cells?.[x-1]?.[y+1]?.material_attributes.empty && !fallDir) {
+                        cell.xv += 1;
+                        cell.yv += 0.5;
+                    }
+                }
+            }
         }
         cell.xv *= cell.friction || sim_settings.friction;
         cell.yv *= cell.friction || sim_settings.friction;
@@ -217,10 +243,10 @@ function physics(cell,x,y) {
         cell.y += cell.yv;
     }
     if(cell.material_attributes.physics_custom) cell.material_attributes.physics_custom(cell);
-    if(cell.type == "AIR" && backrooms[x][y]) {
+    /* if(cell.type == "AIR" && backrooms[x][y]) {
         cells[x][y] = backrooms[x][y];
         backrooms[x][y] = false;
-    }
+    } */
     cell.latestPhysicsUpdate = sim_state.framecount;
 }
 
@@ -231,12 +257,14 @@ function physicsAll() {
 function draw(cell,x,y) {
     if(!cell.material_attributes.draw) return;
     ctx.fillStyle = `rgba(${cell.color})`;
-    ctx.fillRect(x*sim_settings.zoom, y*sim_settings.zoom, sim_settings.zoom, sim_settings.zoom)
+    ctx.fillRect(x*sim_settings.zoom, y*sim_settings.zoom, sim_settings.zoom, sim_settings.zoom);
     cell.age++;
 }
 
 function drawAll() {
+    ctx.beginPath();
     forAllCells(draw);
+    ctx.closePath();
 }
 
 function loop() {
@@ -260,7 +288,10 @@ function loop() {
     }
     drawAll();
     let drawEnd = Date.now();
-    if(sim_state.framecount % 60 == 0) console.log(`[loop] took ${Date.now()-startTime}ms, spending ${physEnd-physStart}ms on physics, and ${drawEnd-drawStart}ms on rendering.`);
+    if(Date.now() - sim_state.last_perf_printout > 1000) {
+        sim_state.last_perf_printout = Date.now();
+        console.log(`[loop] took ${Date.now()-startTime}ms, spending ${physEnd-physStart}ms on physics, and ${drawEnd-drawStart}ms on rendering.`);
+    }
     if(sim_state.running) setTimeout(loop,15)
 }
 
@@ -292,7 +323,8 @@ brush_size_slider.addEventListener("change", e => {
 });
 
 forAllCells((_, x, y) => {
-    new Cell("AIR",20,x,y,0,0,0);
+    let fillType = mat_attrs[urlParams.get("fill")] ? urlParams.get("fill") : "AIR";
+    new Cell(fillType,20,x,y,0,0,0);
 });
 
 sim_state.running = true;
