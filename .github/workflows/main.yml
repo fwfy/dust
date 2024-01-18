@@ -15,4 +15,4 @@ jobs:
         source: "index.html,dust.js"
         target: /var/www/fwfy.club/dust
         key: ${{ secrets.KEY }}
-        rm: true
+        rm: false
