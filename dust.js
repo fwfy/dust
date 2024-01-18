@@ -1,11 +1,10 @@
 const canvas = document.getElementById("dust_canvas");
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', {willReadFrequently: true});
 const urlParams = new URLSearchParams(window.location.search);
 
 let sim_settings = {
     width: Number(urlParams.get('size')) || 200,
     height: Number(urlParams.get('size')) || 200,
-    zoom: urlParams.has('size') ? 600/Number(urlParams.get('size')) : 3,
     friction: 0.98
 }
 
@@ -69,14 +68,13 @@ let mat_attrs = {
         gravity: true,
         draw: true,
         color: "0,0,255,128",
-        solid: false,
+        solid: true,
         default_physics: true,
-        friction: 0.999,
         physics_custom: e => {
             let onTopOfWater = cells[e.x][e.y+1]?.type=="WATER";
-            e.xv += ((Math.random()*4)-2)/(onTopOfWater?1:10);
-            e.yv = Math.min(1,onTopOfWater?e.yv:1);
-            e.friction = onTopOfWater?1:0.95;
+            e.xv += (Math.random()-0.5);
+            e.yv = 1;
+            e.falling = true;
             // e.yv += ((Math.random()*2)-1)/5;
         }
     },
@@ -129,11 +127,11 @@ Object.keys(mat_attrs).forEach(e => {
 });
 
 function swapParticles(x1,y1,x2,y2) {
+    /* console.log(x1,y1,x2,y2); */
     if(x1 < 0 || y1 < 0 || x1 > sim_settings.width-1 || y1 > sim_settings.height-1) return;
     if(x2 < 0 || y2 < 0 || x2 > sim_settings.width-1 || y2 > sim_settings.height-1) return;
-    let part = cells[x1][y1];
-    cells[x1][y1] = cells[x2][y2];
-    cells[x2][y2] = part;
+    /* console.log("SWAP!"); */
+    [cells[x1][y1], cells[x2][y2]] = [cells[x2][y2], cells[x1][y1]];
 }
 
 class Cell {
@@ -157,11 +155,8 @@ class Cell {
     updatePosition(ox,oy,nx,ny) {
         try {
             if(ox == nx && oy == ny) return;
-            if(cells[nx][ny].material_attributes.solid) return (this.xv = this.yv = 0);
-            /* if(cells[nx][ny].material_attributes.solid === false && !backrooms[nx][ny]) backrooms[nx][ny] = cells[nx][ny]; */
-            cells[ox][oy] = null;
-            new Cell("AIR",20,ox,oy,0,0,0);
-            cells[nx][ny] = this;
+            if(cells[nx][ny].material_attributes.solid) return;
+            swapParticles(ox,oy,nx,ny);
         } catch(err) {
             return fatalError(`Uncaught exception when attempting to perform Cell.updatePosition (${ox}, ${oy} [${cells[ox]?.[oy]?.type}] -> ${nx} ${ny} [${cells[nx]?.[ny]?.type}])`);
         }
@@ -199,8 +194,8 @@ function forAllCells(callback) {
 }
 
 function blank() {
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.fillRect(0,0,800,600);
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0,0,sim_settings.width,sim_settings.height);
 }
 
 function placeCell(cell_string,x,y) {
@@ -211,8 +206,8 @@ function placeCell(cell_string,x,y) {
 
 function physics(cell,x,y) {
     if(typeof cell == "undefined") return fatalError(`Cell argument to function physics() was undefined! (${x},${y})`);
-    if(cell.x != x) cell.x = x;
-    if(cell.y != y) cell.y = y;
+    if(cell.x != x) cell._x = x;
+    if(cell.y != y) cell._y = y;
     if(cell.latestPhysicsUpdate == sim_state.framecount) return false;
     if(cell.material_attributes.default_physics) {
         if(cell.x < 0) cell.x = 0;
@@ -220,19 +215,23 @@ function physics(cell,x,y) {
         if(cell.x > sim_settings.width) cell.x = sim_settings.width-2;
         if(cell.y > sim_settings.height) cell.y = sim_settings.height-2;
         cell.temp -= cell.temp/1000;
-        cell.falling = (cells?.[x]?.[y+1]?.material_attributes.empty);
+        cell.falling = (cells?.[x]?.[y+1]?.material_attributes.empty || cells?.[x+1]?.[y+1]?.material_attributes.empty || cells?.[x-1]?.[y+1]?.material_attributes.empty);
         if(cell.material_attributes.gravity) {
             if(cell.falling) {
                 if(cells?.[x]?.[y+1]?.material_attributes.empty) {
                     cell.yv += 0.5;
                 } else {
-                    let fallDir = cell.age % 2 == 0;
-                    if(cells?.[x-1]?.[y+1]?.material_attributes.empty && fallDir) {
-                        cell.xv += -1;
-                        cell.yv += 0.5;
-                    } else if (cells?.[x-1]?.[y+1]?.material_attributes.empty && !fallDir) {
-                        cell.xv += 1;
-                        cell.yv += 0.5;
+                    let fallDir = Math.random() < 0.5;
+                    if(fallDir) {
+                        if(cells?.[x-1]?.[y+1]?.material_attributes.empty) {
+                            cell.xv += -1;
+                            cell.yv += 0.5;
+                        }
+                    } else { 
+                        if(cells?.[x+1]?.[y+1]?.material_attributes.empty) {
+                            cell.xv += 1;
+                            cell.yv += 0.5;
+                        }
                     }
                 }
             }
@@ -254,27 +253,39 @@ function physicsAll() {
     forAllCells(physics);
 }
 
+function getColorIndicesForCoord(x, y, width) {
+    const red = y * (width * 4) + x * 4;
+    return [red, red + 1, red + 2, red + 3];
+}
+
 function draw(cell,x,y) {
     if(!cell.material_attributes.draw) return;
-    ctx.fillStyle = `rgba(${cell.color})`;
-    ctx.fillRect(x*sim_settings.zoom, y*sim_settings.zoom, sim_settings.zoom, sim_settings.zoom);
+    // ctx.fillStyle = `rgba(${cell.color})`;
+    // ctx.fillRect(x*sim_settings.zoom, y*sim_settings.zoom, sim_settings.zoom, sim_settings.zoom);
+    let colors = cell.color.split(",").map(e => Number(e));
+    let offsets = getColorIndicesForCoord(x,y,sim_settings.width);
+    for(i=0;i<4;i++) {
+        sim_state.pixel_data.data[offsets[i]] = colors[i];
+    }
     cell.age++;
 }
 
 function drawAll() {
-    ctx.beginPath();
+    sim_state.pixel_data = ctx.getImageData(0,0,sim_settings.width,sim_settings.height);
     forAllCells(draw);
-    ctx.closePath();
+    ctx.putImageData(sim_state.pixel_data,0,0);
 }
 
 function loop() {
     let startTime = Date.now();
     sim_state.framecount++;
     blank();
+    let drawStart = Date.now();
+    drawAll();
+    let drawEnd = Date.now();
     let physStart = Date.now();
     physicsAll();
     let physEnd = Date.now();
-    let drawStart = Date.now();
     if(sim_state.mouse.clicking) {
         for(let xo = -sim_state.brush_size; xo < sim_state.brush_size; xo++) {
             for(let yo = -sim_state.brush_size; yo < sim_state.brush_size; yo++) {
@@ -286,8 +297,6 @@ function loop() {
             }    
         }
     }
-    drawAll();
-    let drawEnd = Date.now();
     if(Date.now() - sim_state.last_perf_printout > 1000) {
         sim_state.last_perf_printout = Date.now();
         console.log(`[loop] took ${Date.now()-startTime}ms, spending ${physEnd-physStart}ms on physics, and ${drawEnd-drawStart}ms on rendering.`);
@@ -299,10 +308,8 @@ canvas.addEventListener("mousemove", e => {
     let rect = canvas.getBoundingClientRect();
     let cx = e.clientX - rect.left;
     let cy = e.clientY - rect.top;
-    let simX = cx / sim_settings.zoom;
-    let simY = cy / sim_settings.zoom;
-    sim_state.mouse.x = Math.max(0, Math.min(sim_settings.width - 1, Math.floor(simX)));
-    sim_state.mouse.y = Math.max(0, Math.min(sim_settings.height - 1, Math.floor(simY)));
+    sim_state.mouse.x = Math.max(0, Math.min(sim_settings.width - 1, Math.floor(cx)));
+    sim_state.mouse.y = Math.max(0, Math.min(sim_settings.height - 1, Math.floor(cy)));
 });
 
 canvas.addEventListener("mousedown", _ => {
@@ -327,5 +334,7 @@ forAllCells((_, x, y) => {
     new Cell(fillType,20,x,y,0,0,0);
 });
 
+canvas.width = sim_settings.width;
+canvas.height = sim_settings.height;
 sim_state.running = true;
 loop();
