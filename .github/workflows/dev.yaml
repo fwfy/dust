@@ -1,5 +1,8 @@
 name: Upload to fwfy.club
-on: push
+on:
+  push:
+    branches:
+      - "dev"
 jobs:
   build:
     name: Publish to site
