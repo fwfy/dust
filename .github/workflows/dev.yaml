@@ -2,7 +2,7 @@ name: Upload to fwfy.club
 on:
   push:
     branches:
-      - "main"
+      - "dev"
 jobs:
   build:
     name: Publish to site
