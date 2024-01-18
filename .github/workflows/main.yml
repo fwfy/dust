@@ -1,8 +1,11 @@
 name: Upload to fwfy.club
-on: [push]
+on:
+  push:
+    branches:
+      - "main"
 jobs:
   build:
-    name: Build
+    name: Publish to site
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
