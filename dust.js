@@ -6,7 +6,7 @@ let sim_settings = {
     width: Number(urlParams.get('size')) || 200,
     height: Number(urlParams.get('size')) || 200,
     friction: 0.98,
-    render_method: urlParams.has("rm") ? urlParams.get("rm") : "fillrect"
+    render_method: urlParams.has("rm") ? urlParams.get("rm") : "bitmap"
 }
 
 let cells = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
@@ -113,7 +113,8 @@ let mat_attrs = {
         solid: true,
         default_physics: false,
         physics_custom: e => {
-            if(this.age > 100) return cells[e.x][e.y] = undefined;
+            if(e.age > 100) return new Cell("AIR",20,e.x,e.y,0,0,0);
+            sim_settings.spaz = true;
             for(i=0;i<10;i++) swapParticles(e.x + getRandomInt(-1,1), e.y + getRandomInt(-1,1), e.x + getRandomInt(-1,1), e.y + getRandomInt(-1,1))
         }
     }
@@ -201,6 +202,7 @@ function blank() {
 
 function physics(cell,x,y) {
     if(typeof cell == "undefined") return fatalError(`Cell argument to function physics() was undefined! (${x},${y})`);
+    cell.age++;
     if(cell.x != x) cell._x = x;
     if(cell.y != y) cell._y = y;
     if(cell.latestPhysicsUpdate == sim_state.framecount) return false;
@@ -255,22 +257,27 @@ function getColorIndicesForCoord(x, y, width) {
 
 function draw(cell,x,y) {
     if(!cell.material_attributes.draw) return;
+    if(Math.random()<0.0005 && sim_settings.spaz) sim_settings.glitching = !sim_settings.glitching;
     if(sim_settings.render_method == "fillrect") {
         ctx.fillStyle = `rgba(${cell.color})`;
-        ctx.fillRect(x, y, 1, 1);
+        ctx.fillRect(x+(sim_settings.glitching?sim_state.glitchBy:0), y, 1, 1);
     } else if(sim_settings.render_method == "bitmap") {
         let colors = cell.color.split(",").map(e => Number(e));
         let offsets = getColorIndicesForCoord(x,y,sim_settings.width);
         for(i=0;i<4;i++) {
-            sim_state.pixel_data.data[offsets[i]] = colors[i];
+            sim_state.pixel_data.data[offsets[i]+(sim_settings.glitching?sim_state.glitchBy:0)] = colors[i];
         }
     } else {
         fatalError(`Unknown render method ${sim_settings.render_method}`);
     }
-    cell.age++;
 }
 
 function drawAll() {
+    if(sim_settings.spaz) {
+        if(Math.random()<0.01) sim_settings.spaz = false;
+    }
+    sim_settings.glitching = !!sim_settings.spaz;
+    sim_state.glitchBy = Math.floor(Math.random()*6)-3
     canvas.width = sim_settings.width;
     canvas.height = sim_settings.height;
     if(sim_settings.render_method == "bitmap") sim_state.pixel_data = ctx.getImageData(0,0,sim_settings.width,sim_settings.height);
