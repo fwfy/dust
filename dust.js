@@ -5,7 +5,8 @@ const urlParams = new URLSearchParams(window.location.search);
 let sim_settings = {
     width: Number(urlParams.get('size')) || 200,
     height: Number(urlParams.get('size')) || 200,
-    friction: 0.98
+    friction: 0.98,
+    render_method: urlParams.has("rm") ? urlParams.get("rm") : "fillrect"
 }
 
 let cells = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
@@ -72,7 +73,7 @@ let mat_attrs = {
         default_physics: true,
         physics_custom: e => {
             let onTopOfWater = cells[e.x][e.y+1]?.type=="WATER";
-            e.xv += (Math.random()-0.5);
+            e.xv += (Math.random()*2)-1;
             e.yv = 1;
             e.falling = true;
             // e.yv += ((Math.random()*2)-1)/5;
@@ -186,8 +187,8 @@ class Cell {
 }
 
 function forAllCells(callback) {
-    for(x=0;x<sim_settings.width;x++) {
-        for(y=0;y<sim_settings.height;y++) {
+    for(let x = 0; x < sim_settings.width; x++) {
+        for(let y = 0; y < sim_settings.height; y++) {
             callback(cells[x][y],x,y);
         }
     }
@@ -196,12 +197,6 @@ function forAllCells(callback) {
 function blank() {
     ctx.fillStyle = "#000000";
     ctx.fillRect(0,0,sim_settings.width,sim_settings.height);
-}
-
-function placeCell(cell_string,x,y) {
-    let cell = parseCell(cell_string,x*y);
-    cells[cell.cellPos] = cell;
-    return cell;
 }
 
 function physics(cell,x,y) {
@@ -260,20 +255,27 @@ function getColorIndicesForCoord(x, y, width) {
 
 function draw(cell,x,y) {
     if(!cell.material_attributes.draw) return;
-    // ctx.fillStyle = `rgba(${cell.color})`;
-    // ctx.fillRect(x*sim_settings.zoom, y*sim_settings.zoom, sim_settings.zoom, sim_settings.zoom);
-    let colors = cell.color.split(",").map(e => Number(e));
-    let offsets = getColorIndicesForCoord(x,y,sim_settings.width);
-    for(i=0;i<4;i++) {
-        sim_state.pixel_data.data[offsets[i]] = colors[i];
+    if(sim_settings.render_method == "fillrect") {
+        ctx.fillStyle = `rgba(${cell.color})`;
+        ctx.fillRect(x, y, 1, 1);
+    } else if(sim_settings.render_method == "bitmap") {
+        let colors = cell.color.split(",").map(e => Number(e));
+        let offsets = getColorIndicesForCoord(x,y,sim_settings.width);
+        for(i=0;i<4;i++) {
+            sim_state.pixel_data.data[offsets[i]] = colors[i];
+        }
+    } else {
+        fatalError(`Unknown render method ${sim_settings.render_method}`);
     }
     cell.age++;
 }
 
 function drawAll() {
-    sim_state.pixel_data = ctx.getImageData(0,0,sim_settings.width,sim_settings.height);
+    canvas.width = sim_settings.width;
+    canvas.height = sim_settings.height;
+    if(sim_settings.render_method == "bitmap") sim_state.pixel_data = ctx.getImageData(0,0,sim_settings.width,sim_settings.height);
     forAllCells(draw);
-    ctx.putImageData(sim_state.pixel_data,0,0);
+    if(sim_settings.render_method == "bitmap") ctx.putImageData(sim_state.pixel_data,0,0);
 }
 
 function loop() {

@@ -5,15 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dust</title>
     <script src="dust.js" defer></script>
-    <style>
-        .game-canvas {
-            width: 512px;
-            height: 512px;
-        }
-    </style>
 </head>
 <body>
-    <canvas id="dust_canvas" class="game-canvas" width="600" height="600"></canvas><br>
+    <canvas id="dust_canvas" width="600" height="600" style="background-color: black;"></canvas><br>
     <label for="particle">Particle Selector</label>  <select name="particle" id="particle_chooser"></select><br>
     <label for="brush_size">Brush Size</label>  <input type="range" min="1" max="5" step="1" id="brush_size" name="brush_size"><br>
 </body>
