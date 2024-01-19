@@ -16,6 +16,6 @@ jobs:
         username: ${{ secrets.USERNAME }}
         port: ${{ secrets.PORT }}
         source: "index.html,dust.js"
-        target: /var/www/fwfy.club/dust/dev
+        target: /var/www/fwfy.club/dust
         key: ${{ secrets.KEY }}
         rm: false
