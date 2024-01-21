@@ -121,29 +121,70 @@ let mat_attrs = {
     }
 }
 
+function importData(callback) {
+    let input = document.createElement('input');
+    input.type = 'file';
+    input.onchange = async _ => {
+        let data = await input.files[0].text();
+        if(callback) callback(data);
+    };
+    input.click();
+}
+
 function unwrapFunstring(fs) {
+    /*
+        FunStrings - a.k.a. Function Strings are a solution to an interesting problem:
+        - How do you create a completely valid JSON file with embedded JavaScript functions?
+
+        This is needed for physics_custom on modded elements to be encoded and decoded correctly,
+        however it could probably also be used for other interesting things in the future.
+
+        To create a FunString:
+
+        1. Get the string representation of your JavaScript function (e.g. func.toString())
+        2. Encode this in base64.
+        3. Place the special marker "FUNSTRING:" at the start of the base64 encoded data.
+        4. Profit!
+
+        Alternatively, there's a createFunstring() implementation below this function.
+    */
     if(!fs.includes("FUNSTRING:")) throw "Not a funstring.";
     return new Function("return " + atob(fs.split(":")[1]))();
 }
 
+function createFunstring(func) {
+    return `FUNSTRING:${btoa(func.toString())}`;
+}
+
+function saveMod(mod) {
+    return JSON.stringify(mod, (k,v) => {
+        if(v instanceof Function) return createFunstring(v);
+        return v;
+    });
+}
+
 function loadMod(mod) {
+    mod = JSON.parse(mod, (k,v) => {
+        if(typeof v == "string" && v.includes("FUNSTRING:")) return unwrapFunstring(v);
+        return v;
+    });
     if(mod.custom_elements) {
         Object.keys(mod.custom_elements).forEach(e => {
             console.log(`Adding mod element ${e}`);
             mat_attrs[e] = mod.custom_elements[e];
-            if(mat_attrs[e].physics_custom) {
-                mat_attrs[e].physics_custom = unwrapFunstring(mat_attrs[e].physics_custom);
-            }
+            addPTypeToChooser(e);
         });
     }
 }
 
-Object.keys(mat_attrs).forEach(e => {
+function addPTypeToChooser(ptype) {
     let opt = document.createElement("option");
-    opt.value = e;
-    opt.innerText = e;
+    opt.value = ptype;
+    opt.innerText = ptype;
     particle_chooser.appendChild(opt);
-});
+}
+
+Object.keys(mat_attrs).forEach(addPTypeToChooser);
 
 function swapParticles(x1,y1,x2,y2) {
     /* console.log(x1,y1,x2,y2); */
@@ -279,7 +320,7 @@ function draw(cell,x,y) {
         let colors = cell.color.split(",").map(e => Number(e));
         let offsets = getColorIndicesForCoord(x,y,sim_settings.width);
         for(i=0;i<4;i++) {
-            sim_state.pixel_data.data[offsets[i]+sim_settings.offset+(sim_settings.glitching?sim_state.glitchBy+Math.round(Math.random()):0)] = colors[i];
+            sim_state.pixel_data.data[offsets[i]+(sim_settings.glitching?sim_state.glitchBy:0)] = colors[i];
         }
     } else {
         fatalError(`Unknown render method ${sim_settings.render_method}`);
