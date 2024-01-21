@@ -1,0 +1,12 @@
+{
+    "custom_elements": {
+        "YELLOW": {
+            "gravity": true,
+            "draw": true,
+            "color": "255,255,0,255",
+            "solid": true,
+            "default_physics": true,
+            "physics_custom": "FUNSTRING:ZnVuY3Rpb24oZSkgeyBlLnl2IC09IDE7IH0="
+        }
+    }
+}

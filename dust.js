@@ -6,7 +6,8 @@ let sim_settings = {
     width: Number(urlParams.get('size')) || 200,
     height: Number(urlParams.get('size')) || 200,
     friction: 0.98,
-    render_method: urlParams.has("rm") ? urlParams.get("rm") : "bitmap"
+    render_method: urlParams.has("rm") ? urlParams.get("rm") : "bitmap",
+    offset: 0
 }
 
 let cells = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
@@ -39,7 +40,7 @@ function getRandomInt(min, max) {
 let mat_attrs = {
     "AIR": {
         gravity: false,
-        draw: false,
+        draw: true,
         color: `255,0,0,255`,
         solid: false,
         default_physics: false,
@@ -120,6 +121,22 @@ let mat_attrs = {
     }
 }
 
+function unwrapFunstring(fs) {
+    if(!fs.includes("FUNSTRING:")) throw "Not a funstring.";
+    return new Function("return " + atob(fs.split(":")[1]))();
+}
+
+function loadMod(mod) {
+    if(mod.custom_elements) {
+        Object.keys(mod.custom_elements).forEach(e => {
+            console.log(`Adding mod element ${e}`);
+            mat_attrs[e] = mod.custom_elements[e];
+            if(mat_attrs[e].physics_custom) {
+                mat_attrs[e].physics_custom = unwrapFunstring(mat_attrs[e].physics_custom);
+            }
+        });
+    }
+}
 
 Object.keys(mat_attrs).forEach(e => {
     let opt = document.createElement("option");
@@ -190,6 +207,7 @@ class Cell {
 function forAllCells(callback) {
     for(let x = 0; x < sim_settings.width; x++) {
         for(let y = 0; y < sim_settings.height; y++) {
+            if(cells[x][y].type == "AIR") continue;
             callback(cells[x][y],x,y);
         }
     }
@@ -239,10 +257,6 @@ function physics(cell,x,y) {
         cell.y += cell.yv;
     }
     if(cell.material_attributes.physics_custom) cell.material_attributes.physics_custom(cell);
-    /* if(cell.type == "AIR" && backrooms[x][y]) {
-        cells[x][y] = backrooms[x][y];
-        backrooms[x][y] = false;
-    } */
     cell.latestPhysicsUpdate = sim_state.framecount;
 }
 
@@ -265,7 +279,7 @@ function draw(cell,x,y) {
         let colors = cell.color.split(",").map(e => Number(e));
         let offsets = getColorIndicesForCoord(x,y,sim_settings.width);
         for(i=0;i<4;i++) {
-            sim_state.pixel_data.data[offsets[i]+(sim_settings.glitching?sim_state.glitchBy:0)] = colors[i];
+            sim_state.pixel_data.data[offsets[i]+sim_settings.offset+(sim_settings.glitching?sim_state.glitchBy+Math.round(Math.random()):0)] = colors[i];
         }
     } else {
         fatalError(`Unknown render method ${sim_settings.render_method}`);
