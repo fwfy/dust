@@ -157,7 +157,7 @@ class Cell {
     updatePosition(ox,oy,nx,ny) {
         try {
             if(ox == nx && oy == ny) return;
-            if(cells[nx][ny].material_attributes.solid) return;
+            if(cells[nx][ny].material_attributes.solid) return (this.xv = this.yv = 0);
             swapParticles(ox,oy,nx,ny);
         } catch(err) {
             return fatalError(`Uncaught exception when attempting to perform Cell.updatePosition (${ox}, ${oy} [${cells[ox]?.[oy]?.type}] -> ${nx} ${ny} [${cells[nx]?.[ny]?.type}])`);
