@@ -6,7 +6,8 @@ let sim_settings = {
     width: Number(urlParams.get('size')) || 200,
     height: Number(urlParams.get('size')) || 200,
     friction: 0.98,
-    render_method: urlParams.has("rm") ? urlParams.get("rm") : "bitmap"
+    render_method: urlParams.has("rm") ? urlParams.get("rm") : "bitmap",
+    offset: 0
 }
 
 let cells = new Array(sim_settings.width).fill(0).map(() => new Array(sim_settings.height).fill(0));
@@ -39,7 +40,7 @@ function getRandomInt(min, max) {
 let mat_attrs = {
     "AIR": {
         gravity: false,
-        draw: false,
+        draw: true,
         color: `255,0,0,255`,
         solid: false,
         default_physics: false,
@@ -120,13 +121,70 @@ let mat_attrs = {
     }
 }
 
+function importData(callback) {
+    let input = document.createElement('input');
+    input.type = 'file';
+    input.onchange = async _ => {
+        let data = await input.files[0].text();
+        if(callback) callback(data);
+    };
+    input.click();
+}
 
-Object.keys(mat_attrs).forEach(e => {
+function unwrapFunstring(fs) {
+    /*
+        FunStrings - a.k.a. Function Strings are a solution to an interesting problem:
+        - How do you create a completely valid JSON file with embedded JavaScript functions?
+
+        This is needed for physics_custom on modded elements to be encoded and decoded correctly,
+        however it could probably also be used for other interesting things in the future.
+
+        To create a FunString:
+
+        1. Get the string representation of your JavaScript function (e.g. func.toString())
+        2. Encode this in base64.
+        3. Place the special marker "FUNSTRING:" at the start of the base64 encoded data.
+        4. Profit!
+
+        Alternatively, there's a createFunstring() implementation below this function.
+    */
+    if(!fs.includes("FUNSTRING:")) throw "Not a funstring.";
+    return new Function("return " + atob(fs.split(":")[1]))();
+}
+
+function createFunstring(func) {
+    return `FUNSTRING:${btoa(func.toString())}`;
+}
+
+function saveMod(mod) {
+    return JSON.stringify(mod, (k,v) => {
+        if(v instanceof Function) return createFunstring(v);
+        return v;
+    });
+}
+
+function loadMod(mod) {
+    mod = JSON.parse(mod, (k,v) => {
+        if(typeof v == "string" && v.includes("FUNSTRING:")) return unwrapFunstring(v);
+        return v;
+    });
+    if(mod.custom_elements) {
+        Object.keys(mod.custom_elements).forEach(e => {
+            console.log(`Adding mod element ${e}`);
+            mat_attrs[e] = mod.custom_elements[e];
+            addPTypeToChooser(e);
+        });
+    }
+}
+
+function addPTypeToChooser(ptype) {
     let opt = document.createElement("option");
-    opt.value = e;
-    opt.innerText = e;
+    opt.value = ptype;
+    opt.innerText = ptype;
     particle_chooser.appendChild(opt);
-});
+}
+
+Object.keys(mat_attrs).forEach(addPTypeToChooser);
 
 function swapParticles(x1,y1,x2,y2) {
     /* console.log(x1,y1,x2,y2); */
@@ -157,7 +215,7 @@ class Cell {
     updatePosition(ox,oy,nx,ny) {
         try {
             if(ox == nx && oy == ny) return;
-            if(cells[nx][ny].material_attributes.solid) return;
+            if(cells[nx][ny].material_attributes.solid) return (this.xv = this.yv = 0);
             swapParticles(ox,oy,nx,ny);
         } catch(err) {
             return fatalError(`Uncaught exception when attempting to perform Cell.updatePosition (${ox}, ${oy} [${cells[ox]?.[oy]?.type}] -> ${nx} ${ny} [${cells[nx]?.[ny]?.type}])`);
@@ -190,6 +248,7 @@ class Cell {
 function forAllCells(callback) {
     for(let x = 0; x < sim_settings.width; x++) {
         for(let y = 0; y < sim_settings.height; y++) {
+            if(cells[x][y].type == "AIR") continue;
             callback(cells[x][y],x,y);
         }
     }
@@ -239,10 +298,6 @@ function physics(cell,x,y) {
         cell.y += cell.yv;
     }
     if(cell.material_attributes.physics_custom) cell.material_attributes.physics_custom(cell);
-    /* if(cell.type == "AIR" && backrooms[x][y]) {
-        cells[x][y] = backrooms[x][y];
-        backrooms[x][y] = false;
-    } */
     cell.latestPhysicsUpdate = sim_state.framecount;
 }
 
