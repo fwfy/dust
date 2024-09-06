@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Copy files over SCP to Atlas
+    - name: Copy files over SCP to web host.
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.HOST }}
