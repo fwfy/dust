@@ -3,7 +3,7 @@ const ctx = canvas.getContext('2d', {willReadFrequently: true});
 const urlParams = new URLSearchParams(window.location.search);
 
 let sim_settings = {
-    width: Number(urlParams.get('size')) || 200,
+    width: Number(urlParams.get('size')) || 500,
     height: Number(urlParams.get('size')) || 200,
     friction: 0.98,
     render_method: urlParams.has("rm") ? urlParams.get("rm") : "bitmap",
@@ -23,7 +23,9 @@ let sim_state = {
     },
     brush_size: brush_size_slider.value,
     current_place_type: "AIR",
-    last_perf_printout: 0
+    last_perf_printout: 0,
+    avg_temperature: 0,
+    cellsNotAir: 0
 }
 
 function fatalError(msg) {
@@ -49,9 +51,20 @@ let mat_attrs = {
     "DUST": {
         gravity: true,
         draw: true,
-        color: `246,161,146,255`,
+        color: `200,161,146,255`,
         solid: true,
         default_physics: true
+    },
+    "HOTDUST": {
+        gravity: true,
+        draw: true,
+        color: "255,100,100,255",
+        solid: true,
+        initial_temp: 5000,
+        default_physics: true,
+        physics_custom: e => {
+            e.temp = 5000;
+        }
     },
     "STUFF": {
         gravity: true,
@@ -77,6 +90,9 @@ let mat_attrs = {
             e.xv += (Math.random()*2)-1;
             e.yv = 1;
             e.falling = true;
+            if(e.temp > 100) {
+                new Cell("AIR", null, e.x, e.y, 0, 0);
+            }
             // e.yv += ((Math.random()*2)-1)/5;
         }
     },
@@ -105,6 +121,33 @@ let mat_attrs = {
         physics_custom: e => {
             e.xv = 0;
             e.yv = 0;
+        }
+    },
+    "C4": {
+        gravity: false,
+        draw: true,
+        color: "245,245,200,255",
+        solid: true,
+        default_physics: false,
+        physics_custom: e => {
+            e.xv = 0;
+            e.yv = 0;
+            if(e.temp > 100) {
+                for(x = -10; x < 10; x++) {
+                    for(y = -10; y < 10; y++) {
+                        if(Math.random() < 0.30) {
+                            let target = cells?.[e.x + x]?.[e.y + y];
+                            if(!target) continue;
+                            if(target.type == "C4") {
+                                target.temp = 200;
+                            } else {
+                                new Cell("AIR", null, e.x + x, e.y + y, 0, 0);
+                            }
+                        }
+                    }
+                }
+                new Cell("DUST", null, e.x, e.y, (Math.random()*40)-20, (Math.random()*40)-20);
+            }
         }
     },
     "WARP": {
@@ -195,11 +238,10 @@ function swapParticles(x1,y1,x2,y2) {
 }
 
 class Cell {
-    constructor(type, temp=0, x=0, y=0, xv=0, yv=0, special) {
+    constructor(type, temp, x=0, y=0, xv=0, yv=0, special) {
         if(x < 0 || y < 0 || x > sim_settings.width-1 || y > sim_settings.height-1) return;
         this.id = Math.random().toString(16).slice(2);
         this.type = type;
-        this.temp = temp;
         this._x = x;
         this._y = y;
         this.xv = xv;
@@ -208,6 +250,8 @@ class Cell {
         this.age = 0;
         this.falling = false;
         this.material_attributes = mat_attrs[this.type];
+        this.temp = temp || this.material_attributes.initial_temp || 30;
+        this.baseTemp = parseInt(temp);
         this.color = this.material_attributes.color;
         this.latestPhysicsUpdate = 0;
         cells[this._x][this._y] = this;
@@ -265,6 +309,22 @@ function physics(cell,x,y) {
     if(cell.x != x) cell._x = x;
     if(cell.y != y) cell._y = y;
     if(cell.latestPhysicsUpdate == sim_state.framecount) return false;
+    if(cell.material_attributes.physics_custom) cell.material_attributes.physics_custom(cell);
+    const NEIGHBOURS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    let neighbour_count = 0;
+    let avgTemp = cell.temp;
+    for(const npos of NEIGHBOURS) {
+        let neighbour = cells?.[cell.x + npos[0]]?.[cell.y + npos[1]];
+        if(!neighbour || neighbour.type == "AIR") continue;
+        avgTemp += neighbour.temp;
+        neighbour_count++;
+    }
+    avgTemp = avgTemp / (neighbour_count + 1);
+    cell.temp = (cell.temp * 0.5) + (avgTemp * 0.5);
+    sim_state.avg_temperature += cell.temp;
+    if(cell.type !== "AIR") sim_state.cellsNotAir++;
+    cell.latestPhysicsUpdate = sim_state.framecount;
+    if(neighbour_count == 4) return;
     if(cell.material_attributes.default_physics) {
         if(cell.x < 0) cell.x = 0;
         if(cell.y < 0) cell.y = 0;
@@ -297,8 +357,6 @@ function physics(cell,x,y) {
         cell.x += cell.xv;
         cell.y += cell.yv;
     }
-    if(cell.material_attributes.physics_custom) cell.material_attributes.physics_custom(cell);
-    cell.latestPhysicsUpdate = sim_state.framecount;
 }
 
 function physicsAll() {
@@ -319,6 +377,7 @@ function draw(cell,x,y) {
     } else if(sim_settings.render_method == "bitmap") {
         let colors = cell.color.split(",").map(e => Number(e));
         let offsets = getColorIndicesForCoord(x,y,sim_settings.width);
+        colors[0] += (cell.temp - cell.baseTemp);
         for(i=0;i<4;i++) {
             sim_state.pixel_data.data[offsets[i]+(sim_settings.glitching?sim_state.glitchBy:0)] = colors[i];
         }
@@ -342,6 +401,8 @@ function drawAll() {
 
 function loop() {
     let startTime = Date.now();
+    sim_state.avg_temperature = 0;
+    sim_state.cellsNotAir = 0;
     sim_state.framecount++;
     blank();
     let drawStart = Date.now();
@@ -362,6 +423,8 @@ function loop() {
         }
     }
     if(Date.now() - sim_state.last_perf_printout > 1000) {
+        sim_state.avg_temperature /= sim_state.cellsNotAir;
+        document.getElementById("temp_readout").innerText = `Simulation Temperature: ${isNaN(sim_state.avg_temperature) ? 0 : sim_state.avg_temperature.toFixed(2)}`;
         sim_state.last_perf_printout = Date.now();
         console.log(`[loop] took ${Date.now()-startTime}ms, spending ${physEnd-physStart}ms on physics, and ${drawEnd-drawStart}ms on rendering.`);
     }
